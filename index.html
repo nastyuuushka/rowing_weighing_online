@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Взвешивание</title>
+    
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ROW">
+    <link rel="icon" type="image/png" href="ROW.png">
+    <link rel="shortcut icon" type="image/png" href="ROW.png">
+    <link rel="apple-touch-icon" href="ROW.png">
+    
+    <!-- Библиотеки -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; min-height: 100vh; }
+        
+        /* Шапка */
+        .header { background: #16213e; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header h2 { color: #e94560; font-size: 20px; }
+        .burger { font-size: 28px; cursor: pointer; background: none; border: none; color: white; padding: 5px; }
+
+        /* Меню */
+        .menu-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10; }
+        .menu-overlay.open { display: block; }
+        .menu-panel { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: #16213e; z-index: 20; transition: right 0.3s; padding: 20px; overflow-y: auto; }
+        .menu-panel.open { right: 0; }
+        .menu-panel h3 { color: #e94560; margin-bottom: 20px; font-size: 18px; }
+        .menu-panel button { display: block; width: 100%; padding: 14px; margin-bottom: 10px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; text-align: left; color: white; background: #0f3460; }
+        .menu-panel button:active { background: #1a4a8a; }
+        .menu-panel .close-btn { background: #e94560; text-align: center; margin-top: 20px; }
+
+        /* Вкладки */
+        .tab { display: none; padding: 20px; }
+        .tab.active { display: block; }
+
+        /* Общие элементы */
+        .box { background: #16213e; border-radius: 12px; padding: 20px; max-width: 400px; margin: 0 auto 15px auto; }
+        input { width: 100%; padding: 14px; border-radius: 8px; border: none; font-size: 16px; background: #0f3460; color: white; margin-bottom: 12px; }
+        button { cursor: pointer; }
+        .big-btn { width: 100%; padding: 16px; border: none; border-radius: 8px; font-size: 20px; font-weight: bold; color: white; background: #e94560; }
+        .big-btn:active { background: #c0392b; }
+        .big-btn:disabled { opacity: 0.5; pointer-events: none; }
+        .btn-blue { background: #3498db; }
+        .btn-green { background: #2ecc71; }
+        .btn-red { background: #e74c3c; }
+        .btn-orange { background: #e67e22; }
+
+        /* Сканер */
+        #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 12px; overflow: hidden; display: none; }
+        .card { background: #16213e; border-radius: 12px; padding: 20px; max-width: 400px; margin: 20px auto; text-align: center; display: none; }
+        .card h3 { margin-bottom: 10px; font-size: 22px; }
+        .card p { color: #ccc; margin: 3px 0; font-size: 16px; }
+        .badge { display: inline-block; padding: 8px 20px; border-radius: 20px; font-weight: bold; margin: 10px 0; }
+        .badge-pass { background: #2ecc71; }
+        .badge-fail { background: #e74c3c; }
+        .badge-none { background: #7f8c8d; }
+        .two-btns { display: flex; gap: 10px; margin-top: 15px; }
+        .two-btns button { flex: 1; padding: 16px; font-size: 18px; border: none; border-radius: 12px; font-weight: bold; color: white; }
+        .btn-pass { background: #2ecc71; }
+        .btn-fail { background: #e74c3c; }
+        .msg { max-width: 400px; margin: 10px auto; padding: 12px; border-radius: 8px; text-align: center; display: none; font-weight: bold; }
+        .msg-ok { background: #2ecc7133; display: block; }
+        .msg-err { background: #e74c3c33; display: block; }
+        .manual { max-width: 400px; margin: 10px auto; text-align: center; }
+        .manual input { background: #0f3460; margin-bottom: 10px; }
+        .manual button { background: #3498db; color: white; border: none; padding: 12px; border-radius: 8px; font-size: 16px; width: 100%; }
+
+        /* Фильтры */
+        .filter-btns { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+        .filter-btn { padding: 8px 12px; border: 2px solid #3498db; border-radius: 20px; cursor: pointer; font-size: 12px; background: transparent; color: #3498db; font-weight: bold; }
+        .filter-btn.active { background: #3498db; color: white; }
+
+        /* Таблица */
+        .results-table { width: 100%; border-collapse: collapse; font-size: 11px; background: #16213e; border-radius: 8px; overflow: hidden; }
+        .results-table th, .results-table td { padding: 6px 4px; text-align: left; border-bottom: 1px solid #2c3e50; }
+        .results-table th { background: #0f3460; font-size: 10px; }
+        .badge-sm { padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; color: white; white-space: nowrap; }
+        .badge-sm-pass { background: #2ecc71; }
+        .badge-sm-fail { background: #e74c3c; }
+        .badge-sm-none { background: #7f8c8d; }
+
+        /* Настройки */
+        .settings-box { background: #16213e; border-radius: 12px; padding: 20px; max-width: 400px; margin: 0 auto 20px auto; }
+        .settings-box h3 { margin-bottom: 15px; color: #e94560; }
+        .settings-box p { color: #ccc; margin-bottom: 15px; font-size: 14px; }
+        .divider { border: none; border-top: 1px solid #2c3e50; margin: 25px 0; }
+
+        /* Списки */
+        .athlete-list { max-width: 500px; margin: 0 auto; }
+        .search-input { margin-bottom: 12px; }
+        .athlete-row { display: flex; align-items: center; padding: 10px 12px; background: #16213e; border-radius: 8px; margin-bottom: 6px; gap: 10px; }
+        .athlete-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: #e94560; margin: 0; flex-shrink: 0; }
+        .athlete-info { flex: 1; min-width: 0; }
+        .athlete-info strong { display: block; font-size: 14px; }
+        .athlete-info span { font-size: 11px; color: #aaa; }
+        .select-all-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 5px; }
+        .select-all-row label { font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .select-all-row input { width: 18px; height: 18px; accent-color: #e94560; margin: 0; }
+        .hidden-canvas { position: absolute; left: -9999px; top: -9999px; }
+
+        /* История */
+        .event-log { max-width: 400px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 15px; max-height: 250px; overflow-y: auto; }
+        .event-item { padding: 8px 0; border-bottom: 1px solid #2c3e50; font-size: 12px; }
+        .event-item:last-child { border-bottom: none; }
+        .event-time { color: #888; font-size: 10px; }
+        .event-pass { color: #2ecc71; }
+        .event-fail { color: #e74c3c; }
+        .event-reset { color: #e74c3c; }
+        .event-delete { color: #e74c3c; }
+        .event-add { color: #3498db; }
+
+        /* Формы */
+        .add-form { max-width: 400px; margin: 0 auto; }
+        .add-form label { display: block; margin-bottom: 4px; font-size: 13px; color: #aaa; }
+    </style>
+</head>
+<body>
+    <!-- ==================== ШАПКА ==================== -->
+    <div class="header">
+        <h2>⚖️ Взвешивание</h2>
+        <button class="burger" onclick="toggleMenu()">☰</button>
+    </div>
+
+    <!-- ==================== МЕНЮ ==================== -->
+    <div class="menu-overlay" id="menuOverlay" onclick="toggleMenu()"></div>
+    <div class="menu-panel" id="menuPanel">
+        <h3>Меню</h3>
+        <button onclick="switchTab('scan')">📷 Сканер</button>
+        <button onclick="switchTab('results')">📋 Результаты</button>
+        <button onclick="switchTab('generator')">📱 Генератор QR</button>
+        <button onclick="switchTab('settings')">⚙️ Настройки</button>
+        <button class="close-btn" onclick="toggleMenu()">✕ Закрыть</button>
+    </div>
+
+    <!-- ==================== СКАНЕР ==================== -->
+    <div class="tab active" id="tab-scan">
+        <div class="box" id="step1">
+            <input type="text" id="judgeName" placeholder="Фамилия судьи" autofocus>
+            <button class="big-btn" onclick="startWork()">НАЧАТЬ ВЗВЕШИВАНИЕ</button>
+        </div>
+        <div id="reader"></div>
+        <div class="manual" id="manualBox" style="display:none;">
+            <p style="margin-bottom:8px;">Введите регистрационный номер:</p>
+            <input type="text" id="manualId" placeholder="Рег. номер">
+            <button onclick="lookupById()">НАЙТИ</button>
+        </div>
+        <div class="card" id="athleteCard">
+            <div id="statusBadge"></div>
+            <h3 id="athName"></h3>
+            <p id="athRegNumber"></p>
+            <p id="athClub"></p>
+            <p id="athRegion"></p>
+            <p id="athClass"></p>
+            <div class="two-btns" id="actionButtons"></div>
+        </div>
+        <div class="msg" id="message"></div>
+    </div>
+
+    <!-- ==================== РЕЗУЛЬТАТЫ ==================== -->
+    <div class="tab" id="tab-results">
+        <div style="max-width: 100%; overflow-x: auto;">
+            <input type="text" class="search-input" id="resultsSearch" placeholder="🔍 Поиск..." oninput="applyResultsFilters()">
+            <div class="filter-btns">
+                <button class="filter-btn active" onclick="setResultsFilter('all')" id="res-filter-all">Все</button>
+                <button class="filter-btn" onclick="setResultsFilter('pass')" id="res-filter-pass">✅ Допущены</button>
+                <button class="filter-btn" onclick="setResultsFilter('fail')" id="res-filter-fail">❌ Не допущены</button>
+                <button class="filter-btn" onclick="setResultsFilter('none')" id="res-filter-none">⚪ Не проходили</button>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+                <button class="big-btn btn-blue" style="flex:1; font-size:14px;" onclick="downloadResultsCSV()">📥 Скачать CSV</button>
+                <button class="big-btn btn-green" style="flex:1; font-size:14px;" onclick="loadResultsData()">🔄 Обновить</button>
+            </div>
+            <table class="results-table">
+                <thead>
+                    <tr><th>Рег.№</th><th>Фамилия</th><th>Имя</th><th>Регион</th><th>Статус</th><th>Судья</th><th>Время</th></tr>
+                </thead>
+                <tbody id="resultsBody">
+                    <tr><td colspan="7" style="text-align:center;">Нажмите "Обновить"</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ==================== ГЕНЕРАТОР QR ==================== -->
+    <div class="tab" id="tab-generator">
+        <div class="athlete-list">
+            <input type="text" class="search-input" id="qrSearch" placeholder="🔍 Поиск..." oninput="filterAthleteList()">
+            <div class="select-all-row">
+                <label><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> Выбрать всех</label>
+                <span id="selectedCount">Выбрано: 0</span>
+            </div>
+            <div id="athleteCheckboxes"></div>
+            <button class="big-btn btn-green" onclick="generateSelectedQR()" id="genBtn" disabled style="margin-top:12px;">📥 Сгенерировать QR-коды</button>
+            <p style="text-align:center; margin-top:10px; font-size:13px; color:#aaa;" id="genStatus"></p>
+        </div>
+        <div class="hidden-canvas" id="hiddenCanvas"></div>
+    </div>
+
+    <!-- ==================== НАСТРОЙКИ ==================== -->
+    <div class="tab" id="tab-settings">
+        
+        <!-- История -->
+        <div class="settings-box">
+            <h3>📜 История </h3>
+            <div class="event-log" id="eventLog">
+                <p style="text-align:center; color:#888;">Загрузка...</p>
+            </div>
+        </div>
+
+        <hr class="divider" style="max-width:400px; margin: 20px auto;">
+
+        <!-- Добавить спортсмена -->
+        <div class="settings-box">
+            <h3>➕ Добавить спортсмена</h3>
+            <div class="add-form">
+                <label>Рег. номер</label>
+                <input type="text" id="addRegNumber" placeholder="0001">
+                <label>Фамилия</label>
+                <input type="text" id="addLastName" placeholder="Иванов">
+                <label>Имя</label>
+                <input type="text" id="addFirstName" placeholder="Иван">
+                <label>Регион</label>
+                <input type="text" id="addRegion" placeholder="Брестская">
+                <label>Клуб (необязательно)</label>
+                <input type="text" id="addClub" placeholder="ЦСКА">
+                <label>Категория (необязательно)</label>
+                <input type="text" id="addClass" placeholder="К-1 200м">
+                <button class="big-btn btn-blue" onclick="addAthlete()">✅ Добавить спортсмена</button>
+                <p style="margin-top:10px; font-size:12px; color:#3498db;" id="addStatus"></p>
+            </div>
+        </div>
+
+        <hr class="divider" style="max-width:400px; margin: 20px auto;">
+
+        <!-- Загрузка CSV -->
+        <div class="settings-box">
+            <h3>📥 Загрузка CSV</h3>
+            <p>Загрузите файл CSV со спортсменами.<br>Колонки: reg_number, last_name, first_name, region, club, weight_class</p>
+            <input type="file" id="csvFile" accept=".csv" style="margin-bottom:10px;">
+            <button class="big-btn btn-blue" onclick="uploadCSV()">📥 Загрузить CSV</button>
+            <p style="margin-top:10px; font-size:12px; color:#3498db;" id="csvStatus"></p>
+        </div>
+
+        <hr class="divider" style="max-width:400px; margin: 20px auto;">
+
+        <!-- Выборочный сброс -->
+        <div class="settings-box">
+            <h3>🔄 Выборочный сброс результатов</h3>
+            <p>Отметьте спортсменов для сброса статуса.</p>
+            <input type="text" class="search-input" id="resetSearch" placeholder="🔍 Поиск..." oninput="filterResetList()">
+            <div class="select-all-row">
+                <label><input type="checkbox" id="selectAllReset" onchange="toggleSelectAllReset()"> Выбрать всех</label>
+                <span id="resetCount">Выбрано: 0</span>
+            </div>
+            <div id="resetCheckboxes" style="max-height: 300px; overflow-y: auto;"></div>
+            <button class="big-btn btn-orange" onclick="resetSelected()" id="resetBtn" disabled style="margin-top:12px;">🔄 Сбросить статус</button>
+            <p style="margin-top:10px; font-size:12px; color:#e67e22;" id="resetSelectedStatus"></p>
+        </div>
+
+        <hr class="divider" style="max-width:400px; margin: 20px auto;">
+
+        <!-- Полный сброс -->
+        <div class="settings-box">
+            <h3>⚙️ Полный сброс результатов</h3>
+            <p>Очистка всех результатов взвешивания.</p>
+            <button class="big-btn btn-red" onclick="resetWeighIns()">🗑 Сбросить все отметки</button>
+            <p style="margin-top:15px; font-size:12px; color:#e74c3c;" id="resetStatus"></p>
+        </div>
+
+        <hr class="divider" style="max-width:400px; margin: 20px auto;">
+
+        <!-- Удаление спортсменов -->
+        <div class="settings-box">
+            <h3>🗑 Выборочное удаление спортсменов</h3>
+            <p>Отметьте спортсменов для удаления из базы.</p>
+            <input type="text" class="search-input" id="deleteSearch" placeholder="🔍 Поиск..." oninput="filterDeleteList()">
+            <div class="select-all-row">
+                <label><input type="checkbox" id="selectAllDelete" onchange="toggleSelectAllDelete()"> Выбрать всех</label>
+                <span id="deleteCount">Выбрано: 0</span>
+            </div>
+            <div id="deleteCheckboxes" style="max-height: 300px; overflow-y: auto;"></div>
+            <button class="big-btn btn-red" onclick="deleteSelectedAthletes()" id="deleteBtn" disabled style="margin-top:12px;">🗑 Удалить выбранных</button>
+            <p style="margin-top:10px; font-size:12px; color:#e74c3c;" id="deleteStatus"></p>
+        </div>
+
+        <hr class="divider" style="max-width:400px; margin: 20px auto;">
+
+        <!-- Полное удаление -->
+        <div class="settings-box">
+            <h3>💀 Полное удаление всех спортсменов</h3>
+            <p>Удаляет всех спортсменов и все результаты. Необратимо.</p>
+            <button class="big-btn btn-red" onclick="deleteAllAthletes()">💀 Удалить всех спортсменов</button>
+            <p style="margin-top:15px; font-size:12px; color:#e74c3c;" id="deleteAllStatus"></p>
+        </div>
+
+    </div>
+
+    <!-- ==================== СКРИПТ ==================== -->
+    <script>
+        // ===== НАСТРОЙКИ ПОДКЛЮЧЕНИЯ =====
+        const SUPABASE_URL = 'https://cgqvdhsikjbpgtrikjsc.supabase.co'
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNncXZkaHNpa2picGd0cmlranNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwODkyMzEsImV4cCI6MjEwMTY2NTIzMX0.ITrdbGWe8FppPOvz5B9yIhobg8iy3lCl7-Q6m524Ijo'
+        // ================================
+        
+        const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+        
+        // Глобальные переменные
+        let judgeName = ''
+        let currentAthlete = null
+        let scanner = null
+        let allAthletes = []
+        let resultsData = []
+        let resultsFilter = 'all'
+        let resetAthletesList = []
+        let deleteAthletesList = []
+
+        // ==================== REALTIME ====================
+        db.channel('weigh-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'weigh_ins' }, () => {
+                if (document.getElementById('tab-results').classList.contains('active')) {
+                    loadResultsData()
+                }
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'event_log' }, () => {
+                if (document.getElementById('tab-settings').classList.contains('active')) {
+                    loadEventLog()
+                }
+            })
+            .subscribe()
+
+        // ==================== МЕНЮ ====================
+        function toggleMenu() {
+            document.getElementById('menuOverlay').classList.toggle('open')
+            document.getElementById('menuPanel').classList.toggle('open')
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+            document.getElementById('tab-' + tabName).classList.add('active')
+            toggleMenu()
+            
+            if (tabName === 'results') {
+                loadResultsData()
+                document.getElementById('resultsSearch').value = ''
+            }
+            if (tabName === 'generator') {
+                loadAthleteList()
+                document.getElementById('qrSearch').value = ''
+            }
+            if (tabName === 'settings') {
+                renderResetList()
+                renderDeleteList()
+                loadEventLog()
+            }
+        }
+
+        // ==================== СКАНЕР ====================
+        function startWork() {
+            const name = document.getElementById('judgeName').value.trim()
+            if (!name) { alert('Введите фамилию судьи!'); return }
+            
+            judgeName = name
+            document.getElementById('step1').style.display = 'none'
+            document.getElementById('reader').style.display = 'block'
+            document.getElementById('manualBox').style.display = 'block'
+            
+            try {
+                scanner = new Html5Qrcode("reader")
+                scanner.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (text) => { findAthlete(text) },
+                    () => {}
+                )
+            } catch(e) {
+                document.getElementById('reader').style.display = 'none'
+            }
+        }
+
+        function lookupById() {
+            const query = document.getElementById('manualId').value.trim()
+            if (!query) { alert('Введите регистрационный номер'); return }
+            findAthlete(query)
+        }
+
+        async function findAthlete(query) {
+            const cleanQuery = String(query).trim()
+            
+            let { data: athlete } = await db.from('athletes').select('*').eq('reg_number', cleanQuery).single()
+            if (!athlete) {
+                const { data: byId } = await db.from('athletes').select('*').eq('id', cleanQuery).single()
+                athlete = byId
+            }
+            
+            if (!athlete) {
+                showMessage('Спортсмен с номером ' + cleanQuery + ' не найден', 'err')
+                return
+            }
+            
+            const { data: last } = await db.from('weigh_ins')
+                .select('*').eq('athlete_id', athlete.id)
+                .order('created_at', { ascending: false }).limit(1)
+            
+            currentAthlete = athlete
+            showCard(athlete, last?.[0] || null)
+        }
+
+        function showCard(athlete, last) {
+            document.getElementById('athleteCard').style.display = 'block'
+            document.getElementById('athName').textContent = (athlete.last_name||'') + ' ' + (athlete.first_name||'')
+            document.getElementById('athRegNumber').textContent = 'Рег. номер: ' + (athlete.reg_number||'—')
+            document.getElementById('athClub').textContent = 'Клуб: ' + (athlete.club||'—')
+            document.getElementById('athRegion').textContent = 'Регион: ' + (athlete.region||'—')
+            document.getElementById('athClass').textContent = 'Категория: ' + (athlete.weight_class||'—')
+            
+            const sd = document.getElementById('statusBadge')
+            const btns = document.getElementById('actionButtons')
+            
+            if (last) {
+                const s = last.status
+                sd.innerHTML = '<span class="badge ' + (s==='pass'?'badge-pass':'badge-fail') + '">' +
+                    (s==='pass'?'✅ ДОПУЩЕН':'❌ НЕ ДОПУЩЕН') + '</span>'
+                btns.innerHTML = ''
+            } else {
+                sd.innerHTML = '<span class="badge badge-none">НЕ ПРОХОДИЛ</span>'
+                btns.innerHTML = '<button class="btn-pass" onclick="save(\'pass\')">✅ ДОПУЩЕН</button>' +
+                    '<button class="btn-fail" onclick="save(\'fail\')">❌ НЕ ДОПУЩЕН</button>'
+            }
+        }
+
+        async function save(status) {
+            if (!currentAthlete || !judgeName) return
+            
+            document.querySelectorAll('#actionButtons button').forEach(b => b.disabled = true)
+            
+            const { error } = await db.from('weigh_ins').insert({
+                athlete_id: currentAthlete.id,
+                judge_name: judgeName,
+                status: status
+            })
+            
+            if (error) {
+                showMessage('ОШИБКА: ' + error.message, 'err')
+                document.querySelectorAll('#actionButtons button').forEach(b => b.disabled = false)
+            } else {
+                const txt = status === 'pass' ? 'ДОПУЩЕН' : 'НЕ ДОПУЩЕН'
+                showMessage(currentAthlete.last_name + ' — ' + txt, 'ok')
+                await addEvent(status, currentAthlete)
+                const { data: last } = await db.from('weigh_ins')
+                    .select('*').eq('athlete_id', currentAthlete.id)
+                    .order('created_at', { ascending: false }).limit(1)
+                showCard(currentAthlete, last?.[0] || null)
+            }
+        }
+
+        function showMessage(text, type) {
+            const msg = document.getElementById('message')
+            msg.textContent = text
+            msg.className = 'msg msg-' + type
+            setTimeout(() => { msg.className = 'msg' }, 4000)
+        }
+
+        // ==================== ИСТОРИЯ ====================
+        async function addEvent(type, athlete) {
+            await db.from('event_log').insert({
+                event_type: type,
+                athlete_name: (athlete.last_name||'') + ' ' + (athlete.first_name||''),
+                reg_number: athlete.reg_number || '',
+                judge_name: judgeName
+            })
+        }
+
+        async function addSystemEvent(type, text) {
+            await db.from('event_log').insert({
+                event_type: type,
+                athlete_name: text,
+                reg_number: '',
+                judge_name: 'Система'
+            })
+        }
+
+        async function loadEventLog() {
+            const log = document.getElementById('eventLog')
+            log.innerHTML = '<p style="text-align:center; color:#888;">Загрузка...</p>'
+            
+            const { data: events } = await db.from('event_log')
+                .select('*').order('created_at', { ascending: false }).limit(50)
+            
+            if (!events || events.length === 0) {
+                log.innerHTML = '<p style="text-align:center; color:#888;">Событий пока нет</p>'
+                return
+            }
+            
+            log.innerHTML = events.map(e => {
+                const time = new Date(e.created_at).toLocaleString('ru-RU')
+                let cls = '', icon = ''
+                if (e.event_type === 'pass')      { cls = 'event-pass';   icon = '✅' }
+                else if (e.event_type === 'fail') { cls = 'event-fail';   icon = '❌' }
+                else if (e.event_type === 'reset'){ cls = 'event-reset';  icon = '🔄' }
+                else if (e.event_type === 'delete'){cls = 'event-delete'; icon = '🗑' }
+                else if (e.event_type === 'add')  { cls = 'event-add';    icon = '➕' }
+                return `<div class="event-item ${cls}">
+                    ${icon} <strong>${e.athlete_name}</strong>
+                    ${e.reg_number ? '(рег.№ ' + e.reg_number + ')' : ''}
+                    <br><span class="event-time">${time} | ${e.judge_name}</span>
+                </div>`
+            }).join('')
+        }
+
+        // ==================== ДОБАВЛЕНИЕ СПОРТСМЕНА ====================
+        async function addAthlete() {
+            const reg   = document.getElementById('addRegNumber').value.trim()
+            const last  = document.getElementById('addLastName').value.trim()
+            const first = document.getElementById('addFirstName').value.trim()
+            const region = document.getElementById('addRegion').value.trim()
+            const club  = document.getElementById('addClub').value.trim()
+            const cls   = document.getElementById('addClass').value.trim()
+            
+            if (!reg || !last || !first) {
+                document.getElementById('addStatus').textContent = '❌ Заполните рег.номер, фамилию и имя'
+                return
+            }
+            
+            const { error } = await db.from('athletes').insert({
+                reg_number: reg,
+                last_name: last,
+                first_name: first,
+                region: region || null,
+                club: club || null,
+                weight_class: cls || null
+            })
+            
+            if (error) {
+                document.getElementById('addStatus').textContent = 'Ошибка: ' + error.message
+            } else {
+                document.getElementById('addStatus').textContent = '✅ Спортсмен добавлен!'
+                await addSystemEvent('add', last + ' ' + first + ' (рег.№ ' + reg + ')')
+                ['addRegNumber','addLastName','addFirstName','addRegion','addClub','addClass']
+                    .forEach(id => document.getElementById(id).value = '')
+                setTimeout(() => { document.getElementById('addStatus').textContent = '' }, 3000)
+            }
+        }
+
+        // ==================== ЗАГРУЗКА CSV ====================
+        async function uploadCSV() {
+            const fileInput = document.getElementById('csvFile')
+            const file = fileInput.files[0]
+            
+            if (!file) {
+                document.getElementById('csvStatus').textContent = '❌ Выберите файл'
+                return
+            }
+            
+            const reader = new FileReader()
+            
+            reader.onload = async function(e) {
+                const text = e.target.result
+                const lines = text.split('\n').filter(l => l.trim())
+                
+                if (lines.length < 2) {
+                    document.getElementById('csvStatus').textContent = '❌ Файл пуст'
+                    return
+                }
+                
+                const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''))
+                
+                const idx = {
+                    reg:    headers.findIndex(h => h === 'reg_number'),
+                    last:   headers.findIndex(h => h === 'last_name'),
+                    first:  headers.findIndex(h => h === 'first_name'),
+                    region: headers.findIndex(h => h === 'region'),
+                    club:   headers.findIndex(h => h === 'club'),
+                    cls:    headers.findIndex(h => h === 'weight_class')
+                }
+                
+                if (idx.reg === -1 || idx.last === -1 || idx.first === -1) {
+                    document.getElementById('csvStatus').textContent = '❌ Нужны колонки: reg_number, last_name, first_name'
+                    return
+                }
+                
+                const athletes = []
+                let skipped = 0
+                
+                for (let i = 1; i < lines.length; i++) {
+                    const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''))
+                    const reg = vals[idx.reg] || ''
+                    const last = vals[idx.last] || ''
+                    const first = vals[idx.first] || ''
+                    
+                    if (!reg || !last || !first) { skipped++; continue }
+                    
+                    athletes.push({
+                        reg_number: reg,
+                        last_name: last,
+                        first_name: first,
+                        region: (idx.region !== -1 ? vals[idx.region] : '') || null,
+                        club: (idx.club !== -1 ? vals[idx.club] : '') || null,
+                        weight_class: (idx.cls !== -1 ? vals[idx.cls] : '') || null
+                    })
+                }
+                
+                if (athletes.length === 0) {
+                    document.getElementById('csvStatus').textContent = '❌ Нет данных для загрузки'
+                    return
+                }
+                
+                document.getElementById('csvStatus').textContent = 'Загрузка ' + athletes.length + ' спортсменов...'
+                
+                const { error } = await db.from('athletes').insert(athletes)
+                
+                if (error) {
+                    document.getElementById('csvStatus').textContent = '❌ Ошибка: ' + error.message
+                } else {
+                    let msg = '✅ Загружено ' + athletes.length + ' спортсменов!'
+                    if (skipped > 0) msg += ' (пропущено: ' + skipped + ')'
+                    document.getElementById('csvStatus').textContent = msg
+                    await addSystemEvent('add', 'CSV: ' + athletes.length + ' спортсменов')
+                    fileInput.value = ''
+                    setTimeout(() => { document.getElementById('csvStatus').textContent = '' }, 4000)
+                }
+            }
+            
+            reader.readAsText(file)
+        }
+
+        // ==================== РЕЗУЛЬТАТЫ ====================
+        async function loadResultsData() {
+            const tbody = document.getElementById('resultsBody')
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>'
+            
+            const { data: athletes } = await db.from('athletes').select('*').order('reg_number', { ascending: true })
+            const { data: weighIns } = await db.from('weigh_ins').select('*').order('created_at', { ascending: false })
+            
+            if (!athletes) {
+                tbody.innerHTML = '<tr><td colspan="7">Ошибка загрузки</td></tr>'
+                return
+            }
+            
+            resultsData = athletes.map(a => {
+                const last = weighIns?.find(w => w.athlete_id === a.id)
+                return {
+                    ...a,
+                    weigh_status: last?.status || null,
+                    weigh_judge: last?.judge_name || '',
+                    weigh_time: last?.created_at || ''
+                }
+            })
+            
+            applyResultsFilters()
+        }
+
+        function setResultsFilter(filter) {
+            resultsFilter = filter
+            applyResultsFilters()
+        }
+
+        function applyResultsFilters() {
+            document.querySelectorAll('#tab-results .filter-btn').forEach(b => b.classList.remove('active'))
+            document.getElementById('res-filter-' + resultsFilter).classList.add('active')
+            
+            let filtered = resultsData
+            if (resultsFilter === 'pass') filtered = resultsData.filter(a => a.weigh_status === 'pass')
+            else if (resultsFilter === 'fail') filtered = resultsData.filter(a => a.weigh_status === 'fail')
+            else if (resultsFilter === 'none') filtered = resultsData.filter(a => !a.weigh_status)
+            
+            const q = document.getElementById('resultsSearch').value.toLowerCase().trim()
+            if (q) filtered = filtered.filter(a =>
+                ((a.last_name||'') + ' ' + (a.first_name||'') + ' ' + (a.reg_number||'')).toLowerCase().includes(q)
+            )
+            
+            const tbody = document.getElementById('resultsBody')
+            tbody.innerHTML = ''
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Нет данных</td></tr>'
+                return
+            }
+            
+            filtered.forEach(a => {
+                let badge = '<span class="badge-sm badge-sm-none">—</span>'
+                if (a.weigh_status === 'pass') badge = '<span class="badge-sm badge-sm-pass">ДОПУЩЕН</span>'
+                else if (a.weigh_status === 'fail') badge = '<span class="badge-sm badge-sm-fail">НЕ ДОПУЩЕН</span>'
+                
+                const timeStr = a.weigh_time ? new Date(a.weigh_time).toLocaleString('ru-RU') : '—'
+                
+                tbody.innerHTML += `<tr>
+                    <td>${a.reg_number||'—'}</td>
+                    <td>${a.last_name||''}</td>
+                    <td>${a.first_name||''}</td>
+                    <td>${a.region||'—'}</td>
+                    <td>${badge}</td>
+                    <td>${a.weigh_judge||'—'}</td>
+                    <td>${timeStr}</td>
+                </tr>`
+            })
+        }
+
+        function downloadResultsCSV() {
+            let filtered = resultsData
+            if (resultsFilter === 'pass') filtered = resultsData.filter(a => a.weigh_status === 'pass')
+            else if (resultsFilter === 'fail') filtered = resultsData.filter(a => a.weigh_status === 'fail')
+            else if (resultsFilter === 'none') filtered = resultsData.filter(a => !a.weigh_status)
+            
+            const q = document.getElementById('resultsSearch').value.toLowerCase().trim()
+            if (q) filtered = filtered.filter(a =>
+                ((a.last_name||'') + ' ' + (a.first_name||'') + ' ' + (a.reg_number||'')).toLowerCase().includes(q)
+            )
+            
+            if (filtered.length === 0) { alert('Нет данных'); return }
+            
+            const headers = ['Рег.номер','Фамилия','Имя','Регион','Статус','Судья','Время']
+            const rows = filtered.map(a => [
+                a.reg_number||'', a.last_name||'', a.first_name||'', a.region||'',
+                a.weigh_status==='pass'?'ДОПУЩЕН':a.weigh_status==='fail'?'НЕ ДОПУЩЕН':'—',
+                a.weigh_judge||'—',
+                a.weigh_time?new Date(a.weigh_time).toLocaleString('ru-RU'):'—'
+            ])
+            
+            let csv = '\uFEFF' + headers.join(';') + '\n' + rows.map(r => r.join(';')).join('\n')
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a'); a.href = url; a.download = 'результаты.csv'; a.click()
+            URL.revokeObjectURL(url)
+        }
+
+        // ==================== ГЕНЕРАТОР QR ====================
+        async function loadAthleteList() {
+            const { data: athletes } = await db.from('athletes').select('*').order('reg_number', { ascending: true })
+            if (!athletes || athletes.length === 0) return
+            allAthletes = athletes
+            renderAthleteList(athletes)
+        }
+
+        function renderAthleteList(athletes) {
+            const container = document.getElementById('athleteCheckboxes')
+            container.innerHTML = ''
+            if (!athletes || athletes.length === 0) {
+                container.innerHTML = '<p style="text-align:center;">Ничего не найдено</p>'
+                return
+            }
+            athletes.forEach(a => {
+                const row = document.createElement('div')
+                row.className = 'athlete-row'
+                row.innerHTML = `<input type="checkbox" class="athlete-checkbox" data-id="${a.id}" onchange="updateQRCount()">
+                    <div class="athlete-info"><strong>${a.last_name||''} ${a.first_name||''}</strong>
+                    <span>Рег.№ ${a.reg_number||'—'} | ${a.region||''} | ${a.club||''}</span></div>`
+                container.appendChild(row)
+            })
+            updateQRCount()
+            document.getElementById('selectAll').checked = false
+        }
+
+        function filterAthleteList() {
+            const query = document.getElementById('qrSearch').value.toLowerCase().trim()
+            if (!query) { renderAthleteList(allAthletes); return }
+            renderAthleteList(allAthletes.filter(a =>
+                ((a.last_name||'') + ' ' + (a.first_name||'') + ' ' + (a.reg_number||'') + ' ' + (a.region||'') + ' ' + (a.club||'')).toLowerCase().includes(query)
+            ))
+        }
+
+        function toggleSelectAll() {
+            const checked = document.getElementById('selectAll').checked
+            document.querySelectorAll('#athleteCheckboxes .athlete-checkbox').forEach(cb => cb.checked = checked)
+            updateQRCount()
+        }
+
+        function updateQRCount() {
+            const count = document.querySelectorAll('#athleteCheckboxes .athlete-checkbox:checked').length
+            document.getElementById('selectedCount').textContent = 'Выбрано: ' + count
+            document.getElementById('genBtn').disabled = count === 0
+        }
+
+        async function generateSelectedQR() {
+            const checked = document.querySelectorAll('#athleteCheckboxes .athlete-checkbox:checked')
+            if (checked.length === 0) { alert('Выберите спортсменов'); return }
+            
+            const genBtn = document.getElementById('genBtn')
+            const statusEl = document.getElementById('genStatus')
+            genBtn.disabled = true
+            statusEl.textContent = 'Генерация...'
+            
+            const selectedIds = Array.from(checked).map(cb => cb.dataset.id)
+            const selected = allAthletes.filter(a => selectedIds.includes(String(a.id)))
+            const hiddenDiv = document.getElementById('hiddenCanvas')
+            hiddenDiv.innerHTML = ''
+            const zip = new JSZip()
+            
+            for (const athlete of selected) {
+                const qrDiv = document.createElement('div'); hiddenDiv.appendChild(qrDiv)
+                await new Promise(resolve => {
+                    new QRCode(qrDiv, { text: String(athlete.reg_number), width: 400, height: 400,
+                        colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H })
+                    setTimeout(resolve, 300)
+                })
+                const canvas = qrDiv.querySelector('canvas')
+                if (canvas) {
+                    const png = canvas.toDataURL('image/png').split(',')[1]
+                    const fn = ((athlete.last_name||'') + '_' + (athlete.first_name||'')).replace(/[^a-zA-Zа-яА-Я0-9_]/g, '_') + '.png'
+                    zip.file(fn, png, { base64: true })
+                }
+                qrDiv.remove()
+            }
+            
+            const blob = await zip.generateAsync({ type: 'blob' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a'); a.href = url; a.download = 'QR_codes_selected.zip'; a.click()
+            URL.revokeObjectURL(url)
+            statusEl.textContent = '✅ Скачано ' + selected.length + ' QR-кодов'
+            genBtn.disabled = false
+        }
+
+        // ==================== ВЫБОРОЧНЫЙ СБРОС ====================
+        async function renderResetList(athletes = null) {
+            const container = document.getElementById('resetCheckboxes')
+            container.innerHTML = '<p style="text-align:center;">Загрузка...</p>'
+            if (!athletes) {
+                const { data } = await db.from('athletes').select('*').order('reg_number', { ascending: true })
+                if (!data || data.length === 0) { container.innerHTML = '<p>Нет спортсменов</p>'; return }
+                resetAthletesList = data
+            } else {
+                resetAthletesList = athletes
+            }
+            container.innerHTML = ''
+            resetAthletesList.forEach(a => {
+                const row = document.createElement('div')
+                row.className = 'athlete-row'
+                row.innerHTML = `<input type="checkbox" class="reset-checkbox" data-id="${a.id}" onchange="updateResetCount()">
+                    <div class="athlete-info"><strong>${a.last_name||''} ${a.first_name||''}</strong>
+                    <span>Рег.№ ${a.reg_number||'—'} | ${a.region||''} | ${a.club||''}</span></div>`
+                container.appendChild(row)
+            })
+            updateResetCount()
+            document.getElementById('selectAllReset').checked = false
+        }
+
+        function filterResetList() {
+            const query = document.getElementById('resetSearch').value.toLowerCase().trim()
+            if (!query) { renderResetList(); return }
+            renderResetList(resetAthletesList.filter(a =>
+                ((a.last_name||'') + ' ' + (a.first_name||'') + ' ' + (a.reg_number||'') + ' ' + (a.region||'')).toLowerCase().includes(query)
+            ))
+        }
+
+        function toggleSelectAllReset() {
+            const checked = document.getElementById('selectAllReset').checked
+            document.querySelectorAll('#resetCheckboxes .reset-checkbox').forEach(cb => cb.checked = checked)
+            updateResetCount()
+        }
+
+        function updateResetCount() {
+            const count = document.querySelectorAll('#resetCheckboxes .reset-checkbox:checked').length
+            document.getElementById('resetCount').textContent = 'Выбрано: ' + count
+            document.getElementById('resetBtn').disabled = count === 0
+        }
+
+                async function resetSelected() {
+            const checked = document.querySelectorAll('#resetCheckboxes .reset-checkbox:checked')
+            if (checked.length === 0) { alert('Выберите спортсменов'); return }
+            if (!confirm('Сбросить статус у выбранных?')) return
+            
+            const ids = Array.from(checked).map(cb => cb.dataset.id)
+            const { error } = await db.from('weigh_ins').delete().in('athlete_id', ids)
+            
+            if (error) {
+                document.getElementById('resetSelectedStatus').textContent = 'Ошибка: ' + error.message
+            } else {
+                const names = ids.map(id => {
+                    const a = resetAthletesList.find(x => String(x.id) === id)
+                    return a ? a.last_name + ' ' + a.first_name : ''
+                }).filter(Boolean)
+                await addSystemEvent('reset', 'Сброс: ' + names.join(', '))
+                document.getElementById('resetSelectedStatus').textContent = '✅ Сброшено у ' + ids.length + ' спортсменов'
+                
+                // Обновляем страницу результатов
+                if (document.getElementById('tab-results').classList.contains('active')) {
+                    loadResultsData()
+                }
+                // Очищаем карточку в сканере
+                document.getElementById('athleteCard').style.display = 'none'
+                currentAthlete = null
+                
+                setTimeout(() => {
+                    document.getElementById('resetSelectedStatus').textContent = ''
+                    renderResetList()
+                }, 2000)
+            }
+        }
+
+        // ==================== ПОЛНЫЙ СБРОС ====================
+                async function resetWeighIns() {
+            if (!confirm('Сбросить все отметки?')) return
+            const { error } = await db.from('weigh_ins').delete().neq('id', 0)
+            const el = document.getElementById('resetStatus')
+            if (error) { el.textContent = 'Ошибка: ' + error.message }
+            else {
+                el.textContent = '✅ Сброшено!'
+                await addSystemEvent('reset', 'Все отметки взвешивания сброшены')
+                // Обновляем данные на странице результатов
+                if (document.getElementById('tab-results').classList.contains('active')) {
+                    loadResultsData()
+                }
+                // Очищаем карточку спортсмена в сканере
+                document.getElementById('athleteCard').style.display = 'none'
+                currentAthlete = null
+                setTimeout(() => { el.textContent = '' }, 3000)
+            }
+        }
+
+        // ==================== УДАЛЕНИЕ ====================
+        async function renderDeleteList(athletes = null) {
+            const container = document.getElementById('deleteCheckboxes')
+            container.innerHTML = '<p style="text-align:center;">Загрузка...</p>'
+            if (!athletes) {
+                const { data } = await db.from('athletes').select('*').order('reg_number', { ascending: true })
+                if (!data || data.length === 0) { container.innerHTML = '<p>Нет спортсменов</p>'; return }
+                deleteAthletesList = data
+            } else {
+                deleteAthletesList = athletes
+            }
+            container.innerHTML = ''
+            deleteAthletesList.forEach(a => {
+                const row = document.createElement('div')
+                row.className = 'athlete-row'
+                row.innerHTML = `<input type="checkbox" class="delete-checkbox" data-id="${a.id}" onchange="updateDeleteCount()">
+                    <div class="athlete-info"><strong>${a.last_name||''} ${a.first_name||''}</strong>
+                    <span>Рег.№ ${a.reg_number||'—'} | ${a.region||''} | ${a.club||''}</span></div>`
+                container.appendChild(row)
+            })
+            updateDeleteCount()
+            document.getElementById('selectAllDelete').checked = false
+        }
+
+        function filterDeleteList() {
+            const query = document.getElementById('deleteSearch').value.toLowerCase().trim()
+            if (!query) { renderDeleteList(); return }
+            renderDeleteList(deleteAthletesList.filter(a =>
+                ((a.last_name||'') + ' ' + (a.first_name||'') + ' ' + (a.reg_number||'') + ' ' + (a.region||'')).toLowerCase().includes(query)
+            ))
+        }
+
+        function toggleSelectAllDelete() {
+            const checked = document.getElementById('selectAllDelete').checked
+            document.querySelectorAll('#deleteCheckboxes .delete-checkbox').forEach(cb => cb.checked = checked)
+            updateDeleteCount()
+        }
+
+        function updateDeleteCount() {
+            const count = document.querySelectorAll('#deleteCheckboxes .delete-checkbox:checked').length
+            document.getElementById('deleteCount').textContent = 'Выбрано: ' + count
+            document.getElementById('deleteBtn').disabled = count === 0
+        }
+
+        async function deleteSelectedAthletes() {
+            const checked = document.querySelectorAll('#deleteCheckboxes .delete-checkbox:checked')
+            if (checked.length === 0) { alert('Выберите спортсменов'); return }
+            if (!confirm('Удалить выбранных спортсменов? Необратимо!')) return
+            
+            const ids = Array.from(checked).map(cb => cb.dataset.id)
+            const names = ids.map(id => {
+                const a = deleteAthletesList.find(x => String(x.id) === id)
+                return a ? a.last_name + ' ' + a.first_name : ''
+            }).filter(Boolean)
+            
+            await db.from('weigh_ins').delete().in('athlete_id', ids)
+            const { error } = await db.from('athletes').delete().in('id', ids)
+            
+            if (error) {
+                document.getElementById('deleteStatus').textContent = 'Ошибка: ' + error.message
+            } else {
+                await addSystemEvent('delete', 'Удалены: ' + names.join(', '))
+                document.getElementById('deleteStatus').textContent = '✅ Удалено ' + ids.length + ' спортсменов'
+                setTimeout(() => {
+                    document.getElementById('deleteStatus').textContent = ''
+                    renderDeleteList(); renderResetList(); loadAthleteList()
+                }, 2000)
+            }
+        }
+
+        // ==================== ПОЛНОЕ УДАЛЕНИЕ ====================
+        async function deleteAllAthletes() {
+            if (!confirm('Удалить ВСЕХ спортсменов и ВСЕ результаты? Необратимо!')) return
+            if (!confirm('Точно? Данные нельзя будет восстановить.')) return
+            
+            await db.from('weigh_ins').delete().neq('id', 0)
+            await db.from('event_log').delete().neq('id', 0)
+            const { error } = await db.from('athletes').delete().neq('id', 0)
+            
+            const el = document.getElementById('deleteAllStatus')
+            if (error) { el.textContent = 'Ошибка: ' + error.message }
+            else { el.textContent = '💀 Все спортсмены удалены'; setTimeout(() => { el.textContent = '' }, 3000) }
+        }
+
+        // ==================== PWA ====================
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+        }
+    </script>
+</body>
+</html>
