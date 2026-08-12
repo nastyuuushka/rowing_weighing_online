@@ -1,0 +1,17 @@
+{
+  "name": "ROW",
+  "short_name": "ROW",
+  "description": "Система взвешивания спортсменов",
+  "start_url": "/rowing_weighing_online/",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#e94560",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "ROW.png?v=2",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

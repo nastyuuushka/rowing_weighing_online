@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Результаты взвешивания</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            padding: 20px;
+        }
+        
+        h2 {
+            color: #e94560;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        /* Поиск */
+        .search-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+            background: #0f3460;
+            color: white;
+            margin-bottom: 12px;
+            max-width: 500px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        /* Кнопки */
+        button {
+            cursor: pointer;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .btn-blue {
+            background: #3498db;
+        }
+        
+        .btn-green {
+            background: #2ecc71;
+        }
+        
+        /* Фильтры */
+        .filter-btns {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .filter-btn {
+            padding: 8px 12px;
+            border: 2px solid #3498db;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            background: transparent;
+            color: #3498db;
+            font-weight: bold;
+        }
+        
+        .filter-btn.active {
+            background: #3498db;
+            color: white;
+        }
+        
+        /* Таблица */
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            background: #16213e;
+            border-radius: 8px;
+            overflow: hidden;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .results-table th,
+        .results-table td {
+            padding: 8px 6px;
+            text-align: left;
+            border-bottom: 1px solid #2c3e50;
+        }
+        
+        .results-table th {
+            background: #0f3460;
+            font-size: 11px;
+        }
+        
+        /* Бейджи статусов */
+        .badge-sm {
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+            white-space: nowrap;
+        }
+        
+        .badge-sm-pass {
+            background: #2ecc71;
+        }
+        
+        .badge-sm-fail {
+            background: #e74c3c;
+        }
+        
+        .badge-sm-none {
+            background: #7f8c8d;
+        }
+        
+        /* Панель управления */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        /* Ссылка назад */
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .back-link a {
+            color: #e94560;
+            text-decoration: none;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- Заголовок -->
+    <h2>📋 Результаты взвешивания</h2>
+    
+    <!-- Поиск -->
+    <input 
+        type="text" 
+        class="search-input" 
+        id="resultsSearch" 
+        placeholder="🔍 Поиск по фамилии, имени или рег. номеру..." 
+        oninput="applyFilters()"
+    >
+    
+    <!-- Кнопки фильтров -->
+    <div class="filter-btns">
+        <button class="filter-btn active" onclick="setFilter('all')" id="filter-all">
+            Все
+        </button>
+        <button class="filter-btn" onclick="setFilter('pass')" id="filter-pass">
+            ✅ Допущены
+        </button>
+        <button class="filter-btn" onclick="setFilter('fail')" id="filter-fail">
+            ❌ Не допущены
+        </button>
+        <button class="filter-btn" onclick="setFilter('none')" id="filter-none">
+            ⚪ Не проходили
+        </button>
+    </div>
+    
+    <!-- Кнопки действий -->
+    <div class="controls">
+        <button class="btn-blue" onclick="downloadCSV()">
+            📥 Скачать CSV
+        </button>
+        <button class="btn-green" onclick="loadData()">
+            🔄 Обновить
+        </button>
+    </div>
+    
+    <!-- Таблица результатов -->
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th>Рег.№</th>
+                <th>Фамилия</th>
+                <th>Имя</th>
+                <th>Регион</th>
+                <th>Клуб</th>
+                <th>Категория</th>
+                <th>Статус</th>
+                <th>Судья</th>
+                <th>Время</th>
+            </tr>
+        </thead>
+        <tbody id="resultsBody">
+            <tr>
+                <td colspan="9" style="text-align:center;">Загрузка...</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <!-- Ссылка назад -->
+    <div class="back-link">
+        <a href="index.html">⬅ Назад к сканеру</a>
+    </div>
+
+    <!-- ==================== СКРИПТ ==================== -->
+    <script>
+        // ===== НАСТРОЙКИ ПОДКЛЮЧЕНИЯ =====
+        const SUPABASE_URL = 'https://cgqvdhsikjbpgtrikjsc.supabase.co'
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNncXZkaHNpa2picGd0cmlranNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwODkyMzEsImV4cCI6MjEwMTY2NTIzMX0.ITrdbGWe8FppPOvz5B9yIhobg8iy3lCl7-Q6m524Ijo'
+        // ================================
+        
+        const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+        
+        // Глобальные переменные
+        let resultsData = []
+        let currentFilter = 'all'
+
+        // ==================== REALTIME ====================
+        // Подписываемся на изменения в таблице weigh_ins
+        db.channel('results-changes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'weigh_ins' },
+                () => loadData()
+            )
+            .subscribe()
+
+        // ==================== ЗАГРУЗКА ДАННЫХ ====================
+        async function loadData() {
+            // Загружаем спортсменов (сортируем по регистрационному номеру)
+            const { data: athletes } = await db
+                .from('athletes')
+                .select('*')
+                .order('reg_number', { ascending: true })
+            
+            // Загружаем результаты взвешивания
+            const { data: weighIns } = await db
+                .from('weigh_ins')
+                .select('*')
+                .order('created_at', { ascending: false })
+            
+            if (!athletes) return
+            
+            // Объединяем данные
+            resultsData = athletes.map(athlete => {
+                const last = weighIns?.find(w => w.athlete_id === athlete.id)
+                
+                return {
+                    ...athlete,
+                    weigh_status: last?.status || null,
+                    weigh_judge: last?.judge_name || '',
+                    weigh_time: last?.created_at || ''
+                }
+            })
+            
+            // Применяем фильтры
+            applyFilters()
+        }
+
+        // ==================== ФИЛЬТРЫ ====================
+        function setFilter(filter) {
+            currentFilter = filter
+            applyFilters()
+        }
+
+        function applyFilters() {
+            // Обновляем активную кнопку фильтра
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active')
+            })
+            document.getElementById('filter-' + currentFilter).classList.add('active')
+            
+            // Применяем фильтр по статусу
+            let filtered = resultsData
+            
+            if (currentFilter === 'pass') {
+                filtered = resultsData.filter(a => a.weigh_status === 'pass')
+            } else if (currentFilter === 'fail') {
+                filtered = resultsData.filter(a => a.weigh_status === 'fail')
+            } else if (currentFilter === 'none') {
+                filtered = resultsData.filter(a => !a.weigh_status)
+            }
+            
+            // Применяем поисковый запрос
+            const searchQuery = document.getElementById('resultsSearch')
+                .value
+                .toLowerCase()
+                .trim()
+            
+            if (searchQuery) {
+                filtered = filtered.filter(athlete => {
+                    const full = (
+                        (athlete.last_name || '') + ' ' +
+                        (athlete.first_name || '') + ' ' +
+                        (athlete.reg_number || '')
+                    ).toLowerCase()
+                    
+                    return full.includes(searchQuery)
+                })
+            }
+            
+            // Отрисовываем таблицу
+            renderTable(filtered)
+        }
+
+        // ==================== ОТРИСОВКА ТАБЛИЦЫ ====================
+        function renderTable(data) {
+            const tbody = document.getElementById('resultsBody')
+            tbody.innerHTML = ''
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Нет данных</td></tr>'
+                return
+            }
+            
+            data.forEach(athlete => {
+                // Формируем бейдж статуса
+                let badge
+                
+                if (athlete.weigh_status === 'pass') {
+                    badge = '<span class="badge-sm badge-sm-pass">ДОПУЩЕН</span>'
+                } else if (athlete.weigh_status === 'fail') {
+                    badge = '<span class="badge-sm badge-sm-fail">НЕ ДОПУЩЕН</span>'
+                } else {
+                    badge = '<span class="badge-sm badge-sm-none">—</span>'
+                }
+                
+                // Форматируем время
+                const timeStr = athlete.weigh_time
+                    ? new Date(athlete.weigh_time).toLocaleString('ru-RU')
+                    : '—'
+                
+                // Создаём строку таблицы
+                const row = document.createElement('tr')
+                row.innerHTML = `
+                    <td>${athlete.reg_number || '—'}</td>
+                    <td>${athlete.last_name || ''}</td>
+                    <td>${athlete.first_name || ''}</td>
+                    <td>${athlete.region || '—'}</td>
+                    <td>${athlete.club || ''}</td>
+                    <td>${athlete.weight_class || ''}</td>
+                    <td>${badge}</td>
+                    <td>${athlete.weigh_judge || '—'}</td>
+                    <td>${timeStr}</td>
+                `
+                
+                tbody.appendChild(row)
+            })
+        }
+
+        // ==================== СКАЧИВАНИЕ CSV ====================
+        function downloadCSV() {
+            // Применяем фильтры
+            let filtered = resultsData
+            
+            if (currentFilter === 'pass') {
+                filtered = resultsData.filter(a => a.weigh_status === 'pass')
+            } else if (currentFilter === 'fail') {
+                filtered = resultsData.filter(a => a.weigh_status === 'fail')
+            } else if (currentFilter === 'none') {
+                filtered = resultsData.filter(a => !a.weigh_status)
+            }
+            
+            // Применяем поиск
+            const searchQuery = document.getElementById('resultsSearch')
+                .value
+                .toLowerCase()
+                .trim()
+            
+            if (searchQuery) {
+                filtered = filtered.filter(athlete => {
+                    const full = (
+                        (athlete.last_name || '') + ' ' +
+                        (athlete.first_name || '') + ' ' +
+                        (athlete.reg_number || '')
+                    ).toLowerCase()
+                    
+                    return full.includes(searchQuery)
+                })
+            }
+            
+            if (filtered.length === 0) {
+                alert('Нет данных для скачивания')
+                return
+            }
+            
+            // Заголовки CSV
+            const headers = [
+                'Рег.номер',
+                'Фамилия',
+                'Имя',
+                'Регион',
+                'Клуб',
+                'Категория',
+                'Статус',
+                'Судья',
+                'Время'
+            ]
+            
+            // Строки данных
+            const rows = filtered.map(athlete => {
+                let status
+                
+                if (athlete.weigh_status === 'pass') {
+                    status = 'ДОПУЩЕН'
+                } else if (athlete.weigh_status === 'fail') {
+                    status = 'НЕ ДОПУЩЕН'
+                } else {
+                    status = '—'
+                }
+                
+                const time = athlete.weigh_time
+                    ? new Date(athlete.weigh_time).toLocaleString('ru-RU')
+                    : '—'
+                
+                return [
+                    escapeCSV(athlete.reg_number || ''),
+                    escapeCSV(athlete.last_name || ''),
+                    escapeCSV(athlete.first_name || ''),
+                    escapeCSV(athlete.region || ''),
+                    escapeCSV(athlete.club || ''),
+                    escapeCSV(athlete.weight_class || ''),
+                    status,
+                    escapeCSV(athlete.weigh_judge || ''),
+                    time
+                ]
+            })
+            
+            // Собираем CSV
+            let csv = '\uFEFF' + headers.join(';') + '\n'
+            rows.forEach(row => {
+                csv += row.join(';') + '\n'
+            })
+            
+            // Скачиваем
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = 'результаты_взвешивания.csv'
+            a.click()
+            URL.revokeObjectURL(url)
+        }
+
+        // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+        function escapeCSV(str) {
+            // Экранируем точку с запятой и кавычки
+            if (str.includes(';') || str.includes('"') || str.includes('\n')) {
+                return '"' + str.replace(/"/g, '""') + '"'
+            }
+            return str
+        }
+
+        // ==================== ПЕРВИЧНАЯ ЗАГРУЗКА ====================
+        loadData()
+    </script>
+</body>
+</html>
